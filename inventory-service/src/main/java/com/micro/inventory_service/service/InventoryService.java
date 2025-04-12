@@ -21,11 +21,11 @@ public class InventoryService {
     @Transactional(readOnly = true)
     @SneakyThrows
     public List<InventoryResponse> isInStock(List<String> skuCode){
-        //test vi du neu call cham thi phan ngat mach se xu li nhu nao , vi du la cham 10s , vuot qua cho 3s nen bi
-        // bao exception , tuc la ben ordercontroller no se khong cho den tan 10s , ma chi cho 3s thoi
-        log.info("Wait Started");
-        Thread.sleep(10000);
-        log.info("Wait Ended");
+//        //test vi du neu call cham thi phan ngat mach se xu li nhu nao , vi du la cham 10s , vuot qua cho 3s nen bi
+//        // bao exception , tuc la ben ordercontroller no se khong cho den tan 10s , ma chi cho 3s thoi
+//        log.info("Wait Started");
+//        Thread.sleep(10000);
+//        log.info("Wait Ended");
 
         return  inventoryRepository.findBySkuCodeIn(skuCode).stream()
                .map(inventory ->

@@ -3,10 +3,13 @@ package com.micro.order_service.service;
 import com.micro.order_service.dto.InventoryResponse;
 import com.micro.order_service.dto.OrderLineItemsDto;
 import com.micro.order_service.dto.OrderRequest;
+import com.micro.order_service.event.OrderPlaceEvent;
 import com.micro.order_service.model.Order;
 import com.micro.order_service.model.OrderLineItems;
 import com.micro.order_service.repository.OrderRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -16,12 +19,13 @@ import java.util.UUID;
 
 @Service
 @Transactional
-
+@RequiredArgsConstructor
 public class OrderService {
     @Autowired
     private OrderRepository orderRepository;
     @Autowired
     private WebClient.Builder webClientBuilder;
+    private final KafkaTemplate<String , OrderPlaceEvent> kafkaTemplate;
     public String placeOrder(OrderRequest orderRequest){
             Order order = new Order();
             order.setOrderNumber(UUID.randomUUID().toString());
@@ -46,6 +50,8 @@ public class OrderService {
         for (InventoryResponse response : inventoryResponsesArray) {
             if(response.isInStock() ==  true) {
                 orderRepository.save(order);
+                //thong bao so luong don hang dc dat , gui tin nhan den kafka
+                kafkaTemplate.send("notificationTopic",new OrderPlaceEvent(order.getOrderNumber()));
             }else{
                 throw new IllegalArgumentException("Product is not in stock, plese try again later");
             }
