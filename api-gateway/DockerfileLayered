@@ -1,0 +1,17 @@
+FROM eclipse-temurin:17.0.4.1_1-jre as builder
+WORKDIR extracted
+ADD target/*.jar app.jar
+RUN java -Djarmode=layertools -jar app.jar extract
+
+FROM eclipse-temurin:17.0.4.1_1-jre
+WORKDIR application
+#thay doi code 1 trong 4 file nay thi no tu hieu de cap nhat
+COPY --from=builder extracted/dependencies/ ./
+COPY --from=builder extracted/spring-boot-loader/ ./
+COPY --from=builder extracted/snapshot-dependencies/ ./
+COPY --from=builder extracted/application/ ./
+EXPOSE 8080
+ENTRYPOINT ["java", "org.springframework.boot.loader.JarLauncher"]
+
+
+#co 1 cách nữa để sử dụng Jib , nó sẽ tạo image tự động cho docker mà ko cần dùng docker file (nhớ thêm thư viện cho nó vào file pom tổng)

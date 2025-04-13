@@ -42,20 +42,20 @@
             <version>1.18.30</version> <!-- hoặc phiên bản mới nhất -->
             <scope>provided</scope>
         </dependency>
-        <dependency>
-            <groupId>io.micrometer</groupId>
-            <artifactId>micrometer-tracing-bridge-otel</artifactId>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>io.micrometer</groupId>-->
+<!--            <artifactId>micrometer-tracing-bridge-otel</artifactId>-->
+<!--        </dependency>-->
 
-        <dependency>
-            <groupId>io.opentelemetry</groupId>
-            <artifactId>opentelemetry-exporter-otlp</artifactId>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>io.opentelemetry</groupId>-->
+<!--            <artifactId>opentelemetry-exporter-otlp</artifactId>-->
+<!--        </dependency>-->
 
-        <!-- Nếu bạn muốn gửi trace về Zipkin (hoặc Jaeger), thêm exporter tương ứng -->
-        <dependency>
-            <groupId>io.opentelemetry</groupId>
-            <artifactId>opentelemetry-exporter-zipkin</artifactId>
-        </dependency>
+<!--        &lt;!&ndash; Nếu bạn muốn gửi trace về Zipkin (hoặc Jaeger), thêm exporter tương ứng &ndash;&gt;-->
+<!--        <dependency>-->
+<!--            <groupId>io.opentelemetry</groupId>-->
+<!--            <artifactId>opentelemetry-exporter-zipkin</artifactId>-->
+<!--        </dependency>-->
     </dependencies>
 </project>

@@ -1,27 +1,231 @@
----
-version: '3'
 services:
+## MySQL for Order Service
+  mysql-order:
+    container_name: mysql-order
+    image: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: 12012002  # chỉ cần đặt mật khẩu cho root
+      MYSQL_DATABASE: order_service
+    volumes:
+      - ./mysql-order:/var/lib/mysql
+    ports:
+      - "3308:3306"
+    restart: always
+    networks:
+      - springboot-mysql-net
+
+## MySQL for Inventory Service
+  mysql-inventory:
+    container_name: mysql-inventory
+    image: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: 12012002  # chỉ cần đặt mật khẩu cho root
+      MYSQL_DATABASE: inventory_service
+    volumes:
+      - ./mysql-inventory:/var/lib/mysql
+    ports:
+      - "3309:3306"
+    restart: always
+    networks:
+      - springboot-mysql-net
+
+
+  mongo:
+    image: arm64v8/mongo:4.4
+    platform: linux/arm64
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./mongo-data:/data/db
+    networks:
+      - springboot-mysql-net
+
+  ## Keycloak + MySQL
+  keycloak-mysql:
+    container_name: keycloak-mysql
+    image: mysql
+    platform: linux/arm64
+    volumes:
+      - ./mysql_keycloak_data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: keycloak
+      MYSQL_USER: keycloak
+      MYSQL_PASSWORD: password
+    networks:
+      - springboot-mysql-net
+
+  keycloak:
+      container_name: keycloak
+      image: quay.io/keycloak/keycloak:18.0.0
+      command: [ "start-dev", "--import-realm" ]
+      environment:
+        DB_VENDOR: MYSQL
+        DB_ADDR: keycloak-mysql   # trùng với tên container
+        DB_DATABASE: keycloak
+        DB_USER: keycloak
+        DB_PASSWORD: password
+        KEYCLOAK_ADMIN: admin
+        KEYCLOAK_ADMIN_PASSWORD: admin
+      volumes:
+        - ./realms:/opt/keycloak/data/import/   # đảm bảo folder này có chứa .json
+      ports:
+        - "8080:8080"
+      depends_on:
+        - keycloak-mysql
+      networks:
+        - springboot-mysql-net
+
+#  zipkin:
+#    image: openzipkin/zipkin:2.23
+#    container_name: zipkin
+#    ports:
+#      - "9411:9411"
+#    networks:
+#      - springboot-mysql-net
+
+  ## Kafka + Zookeeper
   zookeeper:
     image: confluentinc/cp-zookeeper:7.0.1
     container_name: zookeeper
+    platform: linux/amd64     # ← thêm dòng này
     ports:
       - "2181:2181"
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - springboot-mysql-net
 
   broker:
     image: confluentinc/cp-kafka:7.0.1
     container_name: broker
+    platform: linux/amd64
     ports:
       - "9092:9092"
+      - "29092:29092"  # Port để connect từ host
     depends_on:
       - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://broker:29092
+
+      # Kết nối đa listener: từ container và từ host
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:9092,PLAINTEXT_HOST://localhost:29092
+
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    networks:
+      - springboot-mysql-net
+
+
+      ## Eureka
+  discovery-server:
+    build:
+      context: ./discovery-server
+      dockerfile: Dockerfile
+    container_name: discovery-server
+    ports:
+      - "8761:8761"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+#    depends_on:
+#      - zipkin
+    networks:
+      - springboot-mysql-net
+
+  ## API Gateway
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "8181:8080"
+    expose:
+      - "8181"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY=TRACE
+    depends_on:
+#      - zipkin
+      - discovery-server
+      - keycloak
+    networks:
+      - springboot-mysql-net
+  ## Product Service
+  product-service:
+    build:
+      context: ./product-service
+      dockerfile: Dockerfile
+    container_name: product-service
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    depends_on:
+      - mongo
+      - discovery-server
+      - api-gateway
+    networks:
+      - springboot-mysql-net
+
+  ## Order Service (using MySQL)
+  order-service:
+    build:
+      context: ./order-service
+      dockerfile: Dockerfile
+    container_name: order-service
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-order:3306/order_service
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=12012002
+    depends_on:
+      - mysql-order
+      - broker
+#      - zipkin
+      - discovery-server
+      - api-gateway
+    networks:
+      - springboot-mysql-net
+
+  ## Inventory Service (using MySQL)
+  inventory-service:
+    build:
+      context: ./inventory-service
+      dockerfile: Dockerfile
+    container_name: inventory-service
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-inventory:3306/inventory_service
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=12012002
+    depends_on:
+      - mysql-inventory
+      - discovery-server
+      - api-gateway
+    networks:
+      - springboot-mysql-net
+
+  ## Notification Service
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    container_name: notification-service
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    depends_on:
+#      - zipkin
+      - broker
+      - discovery-server
+      - api-gateway
+    networks:
+      - springboot-mysql-net
+
+networks:
+  springboot-mysql-net:
+    driver: bridge
